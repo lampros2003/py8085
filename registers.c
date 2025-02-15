@@ -2,9 +2,6 @@
 
 #include <stdint.h>
 
-
-
-
 typedef struct {
     uint8_t A, B, C, D, E, H, L;
     uint16_t PC, SP;
