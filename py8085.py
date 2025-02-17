@@ -8,35 +8,35 @@ print(f"Python architecture: {platform.architecture()[0]}")
 # Load the shared libraries
 try:
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    memaccess = ctypes.CDLL(os.path.join(current_dir, 'memory.dll'))
-    regaccess = ctypes.CDLL(os.path.join(current_dir, 'registers.dll'))
+    memory_dll = ctypes.CDLL(os.path.join(current_dir, 'memory.dll'))
+    registers_dll = ctypes.CDLL(os.path.join(current_dir, 'registers.dll'))
 except Exception as e:
     print(f"Error loading DLLs: {e}")
     sys.exit(1)
 
 # Define function prototypes for memory access
-memaccess.read_memory.argtypes = [ctypes.c_uint16]
-memaccess.read_memory.restype = ctypes.c_uint8
-memaccess.write_memory.argtypes = [ctypes.c_uint16, ctypes.c_uint8]
-memaccess.write_memory.restype = None
+memory_dll.read_memory.argtypes = [ctypes.c_uint16]
+memory_dll.read_memory.restype = ctypes.c_uint8
+memory_dll.write_memory.argtypes = [ctypes.c_uint16, ctypes.c_uint8]
+memory_dll.write_memory.restype = None
 
 # Define function prototypes for register access
-regaccess.read_reg.argtypes = [ctypes.c_uint8]
-regaccess.read_reg.restype = ctypes.c_uint8
-regaccess.write_reg.argtypes = [ctypes.c_uint8, ctypes.c_uint8]
-regaccess.write_reg.restype = None
-regaccess.get_flags.argtypes = []
-regaccess.get_flags.restype = ctypes.c_uint8
-regaccess.set_flags.argtypes = [ctypes.c_uint8]
-regaccess.set_flags.restype = None
-regaccess.get_PC.argtypes = []
-regaccess.get_PC.restype = ctypes.c_uint16
-regaccess.set_PC.argtypes = [ctypes.c_uint16]
-regaccess.set_PC.restype = None
-regaccess.get_SP.argtypes = []
-regaccess.get_SP.restype = ctypes.c_uint16
-regaccess.set_SP.argtypes = [ctypes.c_uint16]
-regaccess.set_SP.restype = None
+registers_dll.read_reg.argtypes = [ctypes.c_uint8]
+registers_dll.read_reg.restype = ctypes.c_uint8
+registers_dll.write_reg.argtypes = [ctypes.c_uint8, ctypes.c_uint8]
+registers_dll.write_reg.restype = None
+registers_dll.get_flags.argtypes = []
+registers_dll.get_flags.restype = ctypes.c_uint8
+registers_dll.set_flags.argtypes = [ctypes.c_uint8]
+registers_dll.set_flags.restype = None
+registers_dll.get_PC.argtypes = []
+registers_dll.get_PC.restype = ctypes.c_uint16
+registers_dll.set_PC.argtypes = [ctypes.c_uint16]
+registers_dll.set_PC.restype = None
+registers_dll.get_SP.argtypes = []
+registers_dll.get_SP.restype = ctypes.c_uint16
+registers_dll.set_SP.argtypes = [ctypes.c_uint16]
+registers_dll.set_SP.restype = None
 
 class CPU8085:
     def __init__(self):
@@ -46,15 +46,15 @@ class CPU8085:
         self.set_flags(0)
 
     def fetch_instruction(self):
-        byte = memaccess.read_memory(ctypes.c_uint16(self.get_PC()))
+        byte = memory_dll.read_memory(ctypes.c_uint16(self.get_PC()))
         self.set_PC(self.get_PC() + 1)
         return byte
 
     def read_memory(self, address):
-        return memaccess.read_memory(ctypes.c_uint16(address))
+        return memory_dll.read_memory(ctypes.c_uint16(address))
 
     def write_memory(self, address, value):
-        memaccess.write_memory(ctypes.c_uint16(address), ctypes.c_uint8(value))
+        memory_dll.write_memory(ctypes.c_uint16(address), ctypes.c_uint8(value))
 
     def read_register(self, regname):
         switcher = {
@@ -63,7 +63,7 @@ class CPU8085:
         }
         reg_num = switcher.get(regname, -1)
         if reg_num >= 0:
-            return regaccess.read_reg(ctypes.c_uint8(reg_num))
+            return registers_dll.read_reg(ctypes.c_uint8(reg_num))
         return 0
 
     def write_register(self, regname, value):
@@ -73,25 +73,25 @@ class CPU8085:
         }
         reg_num = switcher.get(regname, -1)
         if reg_num >= 0:
-            regaccess.write_reg(ctypes.c_uint8(reg_num), ctypes.c_uint8(value))
+            registers_dll.write_reg(ctypes.c_uint8(reg_num), ctypes.c_uint8(value))
 
     def get_flags(self):
-        return regaccess.get_flags()
+        return registers_dll.get_flags()
 
     def set_flags(self, value):
-        regaccess.set_flags(ctypes.c_uint8(value))
+        registers_dll.set_flags(ctypes.c_uint8(value))
 
     def get_PC(self):
-        return regaccess.get_PC()
+        return registers_dll.get_PC()
 
     def set_PC(self, value):
-        regaccess.set_PC(ctypes.c_uint16(value))
+        registers_dll.set_PC(ctypes.c_uint16(value))
 
     def get_SP(self):
-        return regaccess.get_SP()
+        return registers_dll.get_SP()
 
     def set_SP(self, value):
-        regaccess.set_SP(ctypes.c_uint16(value))
+        registers_dll.set_SP(ctypes.c_uint16(value))
 
     def run(self):
         while True:
