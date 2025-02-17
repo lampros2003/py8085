@@ -1,5 +1,3 @@
-Here is a suggested structure for your README file:
-
 # py8085
 
 8085emulator
