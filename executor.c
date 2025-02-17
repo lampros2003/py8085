@@ -68,8 +68,24 @@ static void update_flags(CPU8085Functions* cpu, uint8_t result) {
 __declspec(dllexport) bool execute_instruction(CPU8085Functions* cpu) {
     uint16_t pc = cpu->get_pc();
     uint8_t opcode = cpu->read_memory(pc);
+
+    // Check for MVI instruction (format: 00ddd110)
+    // Mask with 0xC7 (1100 0111) so that any opcode that, when masked, equals 0x06 is treated as MVI.
+    if ((opcode & 0xC7) == 0x06) {
+        uint8_t dest = (opcode >> 3) & 0x07;
+        uint8_t imm = cpu->read_memory(pc + 1);
+        if (dest == REG_M) {
+            // For MVI M, the effective address is in the register pair H and L.
+            uint16_t addr = ((uint16_t)cpu->read_reg(REG_H) << 8) | cpu->read_reg(REG_L);
+            cpu->write_memory(addr, imm);
+        } else {
+            cpu->write_reg(dest, imm);
+        }
+        cpu->set_pc(pc + 2);
+        return true;
+    }
+    
     uint8_t hi_nibble = opcode >> 4;
-    uint8_t lo_nibble = opcode & 0x0F;
     
     switch(hi_nibble) {
         case 0x0: // NOP and other 0x0x instructions
@@ -79,23 +95,31 @@ __declspec(dllexport) bool execute_instruction(CPU8085Functions* cpu) {
             }
             break;
             
-        case 0x4: // MOV B,r
-        case 0x5: // MOV D,r
-        case 0x6: // MOV H,r
-        case 0x7: { // MOV M,r
+        case 0x4: // MOV instructions (01dddsss)
+        case 0x5:
+        case 0x6:
+        case 0x7: 
+        if (opcode == 0x76) { // HLT
+            return false;
+        }
+        
+        else
+        {
             uint8_t dest = (opcode >> 3) & 0x07;
             uint8_t src = opcode & 0x07;
             uint8_t value;
             
+            // If source is M, then use memory pointed by (H,L)
             if (src == REG_M) {
-                uint16_t addr = (cpu->read_reg(REG_H) << 8) | cpu->read_reg(REG_L);
+                uint16_t addr = ((uint16_t)cpu->read_reg(REG_H) << 8) | cpu->read_reg(REG_L);
                 value = cpu->read_memory(addr);
             } else {
                 value = cpu->read_reg(src);
             }
             
+            // If destination is M, write the value to memory pointed by (H,L)
             if (dest == REG_M) {
-                uint16_t addr = (cpu->read_reg(REG_H) << 8) | cpu->read_reg(REG_L);
+                uint16_t addr = ((uint16_t)cpu->read_reg(REG_H) << 8) | cpu->read_reg(REG_L);
                 cpu->write_memory(addr, value);
             } else {
                 cpu->write_reg(dest, value);
@@ -105,28 +129,29 @@ __declspec(dllexport) bool execute_instruction(CPU8085Functions* cpu) {
             return true;
         }
         
-        case 0x3: // Various instructions
+        case 0x3: {
             if (opcode == 0x3A) { // LDA addr
-                uint16_t addr = cpu->read_memory(pc + 2);
-                addr = (addr << 8) | cpu->read_memory(pc + 1);
-                cpu->write_reg(REG_A, cpu->read_memory(addr));
+                // In the assembler, address is stored as: opcode, low byte, then high byte
+                uint8_t low = cpu->read_memory(pc + 1);
+                uint8_t high = cpu->read_memory(pc + 2);
+                uint16_t addr = ((uint16_t)high << 8) | low;
+                uint8_t data = cpu->read_memory(addr);
+                cpu->write_reg(REG_A, data);
                 cpu->set_pc(pc + 3);
                 return true;
-            }
-            else if (opcode == 0x32) { // STA addr
-                uint16_t addr = cpu->read_memory(pc + 2);
-                addr = (addr << 8) | cpu->read_memory(pc + 1);
-                cpu->write_memory(addr, cpu->read_reg(REG_A));
+            } else if (opcode == 0x32) { // STA addr
+                uint8_t low = cpu->read_memory(pc + 1);
+                uint8_t high = cpu->read_memory(pc + 2);
+                uint16_t addr = ((uint16_t)high << 8) | low;
+                uint8_t data = cpu->read_reg(REG_A);
+                cpu->write_memory(addr, data);
                 cpu->set_pc(pc + 3);
                 return true;
             }
             break;
-            
-        case 0x76:
-            if (opcode == 0x76) { // HLT
-                return false;
-            }
-            break;
+        }
+        
+        
     }
     
     // Unknown opcode
