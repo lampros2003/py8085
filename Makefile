@@ -2,7 +2,7 @@ CC = gcc
 CFLAGS = -O2 -Wall -m64 -shared
 LDFLAGS = -Wl,--export-all-symbols
 
-TARGET_DLLS = memory.dll registers.dll
+TARGET_DLLS = memory.dll registers.dll executor.dll
 
 .PHONY: all clean
 
@@ -13,6 +13,11 @@ memory.dll: memory.c
 
 registers.dll: registers.c
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $<
+
+executor.dll: executor.c
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $<	
+
+
 
 clean:
 	rm -f *.dll *.o

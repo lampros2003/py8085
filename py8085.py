@@ -1,6 +1,6 @@
 import sys
 import os
-import ctypes
+from ctypes import c_uint8, c_uint16, c_bool, CFUNCTYPE, POINTER, Structure, byref,CDLL
 import platform
 
 print(f"Python architecture: {platform.architecture()[0]}")
@@ -8,35 +8,41 @@ print(f"Python architecture: {platform.architecture()[0]}")
 # Load the shared libraries
 try:
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    memory_dll = ctypes.CDLL(os.path.join(current_dir, 'memory.dll'))
-    registers_dll = ctypes.CDLL(os.path.join(current_dir, 'registers.dll'))
+    memory_dll = CDLL(os.path.join(current_dir, 'memory.dll'))
+    registers_dll = CDLL(os.path.join(current_dir, 'registers.dll'))
+    executor_dll = CDLL(os.path.join(current_dir, 'executor.dll'))
 except Exception as e:
     print(f"Error loading DLLs: {e}")
     sys.exit(1)
 
 # Define function prototypes for memory access
-memory_dll.read_memory.argtypes = [ctypes.c_uint16]
-memory_dll.read_memory.restype = ctypes.c_uint8
-memory_dll.write_memory.argtypes = [ctypes.c_uint16, ctypes.c_uint8]
+memory_dll.read_memory.argtypes = [c_uint16]
+memory_dll.read_memory.restype = c_uint8
+memory_dll.write_memory.argtypes = [c_uint16, c_uint8]
 memory_dll.write_memory.restype = None
 
 # Define function prototypes for register access
-registers_dll.read_reg.argtypes = [ctypes.c_uint8]
-registers_dll.read_reg.restype = ctypes.c_uint8
-registers_dll.write_reg.argtypes = [ctypes.c_uint8, ctypes.c_uint8]
+registers_dll.read_reg.argtypes = [c_uint8]
+registers_dll.read_reg.restype = c_uint8
+registers_dll.write_reg.argtypes = [c_uint8, c_uint8]
 registers_dll.write_reg.restype = None
 registers_dll.get_flags.argtypes = []
-registers_dll.get_flags.restype = ctypes.c_uint8
-registers_dll.set_flags.argtypes = [ctypes.c_uint8]
+registers_dll.get_flags.restype = c_uint8
+registers_dll.set_flags.argtypes = [c_uint8]
 registers_dll.set_flags.restype = None
 registers_dll.get_PC.argtypes = []
-registers_dll.get_PC.restype = ctypes.c_uint16
-registers_dll.set_PC.argtypes = [ctypes.c_uint16]
+registers_dll.get_PC.restype = c_uint16
+registers_dll.set_PC.argtypes = [c_uint16]
 registers_dll.set_PC.restype = None
 registers_dll.get_SP.argtypes = []
-registers_dll.get_SP.restype = ctypes.c_uint16
-registers_dll.set_SP.argtypes = [ctypes.c_uint16]
+registers_dll.get_SP.restype = c_uint16
+registers_dll.set_SP.argtypes = [c_uint16]
 registers_dll.set_SP.restype = None
+
+
+
+
+
 
 class CPU8085:
     def __init__(self):
@@ -46,15 +52,15 @@ class CPU8085:
         self.set_flags(0)
 
     def fetch_instruction(self):
-        byte = memory_dll.read_memory(ctypes.c_uint16(self.get_PC()))
+        byte = memory_dll.read_memory(c_uint16(self.get_PC()))
         self.set_PC(self.get_PC() + 1)
         return byte
 
     def read_memory(self, address):
-        return memory_dll.read_memory(ctypes.c_uint16(address))
+        return memory_dll.read_memory(c_uint16(address))
 
     def write_memory(self, address, value):
-        memory_dll.write_memory(ctypes.c_uint16(address), ctypes.c_uint8(value))
+        memory_dll.write_memory(c_uint16(address), c_uint8(value))
 
     def read_register(self, regname):
         switcher = {
@@ -63,7 +69,7 @@ class CPU8085:
         }
         reg_num = switcher.get(regname, -1)
         if reg_num >= 0:
-            return registers_dll.read_reg(ctypes.c_uint8(reg_num))
+            return registers_dll.read_reg(c_uint8(reg_num))
         return 0
 
     def write_register(self, regname, value):
@@ -73,25 +79,25 @@ class CPU8085:
         }
         reg_num = switcher.get(regname, -1)
         if reg_num >= 0:
-            registers_dll.write_reg(ctypes.c_uint8(reg_num), ctypes.c_uint8(value))
+            registers_dll.write_reg(c_uint8(reg_num), c_uint8(value))
 
     def get_flags(self):
         return registers_dll.get_flags()
 
     def set_flags(self, value):
-        registers_dll.set_flags(ctypes.c_uint8(value))
+        registers_dll.set_flags(c_uint8(value))
 
     def get_PC(self):
         return registers_dll.get_PC()
 
     def set_PC(self, value):
-        registers_dll.set_PC(ctypes.c_uint16(value))
+        registers_dll.set_PC(c_uint16(value))
 
     def get_SP(self):
         return registers_dll.get_SP()
 
     def set_SP(self, value):
-        registers_dll.set_SP(ctypes.c_uint16(value))
+        registers_dll.set_SP(c_uint16(value))
 
     def run(self):
         while True:
