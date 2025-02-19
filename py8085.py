@@ -172,15 +172,17 @@ class CPU8085:
         iterator = 0
         while True:
             iterator += 1
+            await_input = input(f"Press Enter to execute instruction {iterator} or 'q' to quit: ")
+            if await_input.lower() == 'q':
+                break
             running = executor_dll.execute_instruction(byref(cpu_funcs))
-            # Optionally, print the internal state for debugging
-            print(f"Iteration: {iterator}") 
-            print(f"PC: {self.get_PC()}  SP: {self.get_SP()}  Flags: {self.get_flags()}  A: {registers_dll.read_reg(0)}")
-            print(memory_dll.read_memory(0x0000), memory_dll.read_memory(0x0001), memory_dll.read_memory(0x0002))
-            if not running:
+            
+            if  running==0:
                 print("HLT encountered. Stopping execution.")
                 break
-
+            if running == -1:
+                print("Error encountered. Stopping execution.")
+                break
 
 class assembler:
     """Assembler class to assemble 8085 assembly code into machine code. and write it to the memory of a cpu object.
@@ -195,14 +197,18 @@ class assembler:
         #RP - Register pair, 16-bit data (opcode Register pair 16-bit data in memory) size of 3 bytes
         #A - 16-bit address (opcode 16-bit address) size of 3 bytes
         self.instruction_set = {
-            'MOV': {'size': 1, 'format': 'RR'},  # Register to Register
-            'MVI': {'size': 2, 'format': 'RI'},  # Register, Immediate data
-            'LXI': {'size': 3, 'format': 'RP'},  # Register pair, 16-bit data
-            'LDA': {'size': 3, 'format': 'A'},   # 16-bit address
-            'STA': {'size': 3, 'format': 'A'},   # 16-bit address
-            'HLT': {'size': 1, 'format': 'N'},   # No operands
+            'MOV': {'size': 1, 'format': 'RR'},   # Register to Register
+            'MVI': {'size': 2, 'format': 'RI'},   # Register, Immediate data
+            'LXI': {'size': 3, 'format': 'RP'},   # Register pair, 16-bit data
+            'LDA': {'size': 3, 'format': 'A'},    # 16-bit address
+            'STA': {'size': 3, 'format': 'A'},    # 16-bit address
+            'HLT': {'size': 1, 'format': 'N'},    # No operands
+            'ADD': {'size': 1, 'format': 'R1'},   # One register operand (added to accumulator)
+            'ADI': {'size': 2, 'format': 'RI1'},  # Immediate addition to accumulator
+            'SUB': {'size': 1, 'format': 'R1'},   # One register operand subtraction (from accumulator)
+            'SUI': {'size': 2, 'format': 'RI1'},  # Immediate subtraction from accumulator
         }
-        
+            
         self.register_codes = {
             'A': 0b111, 'B': 0b000, 'C': 0b001,
             'D': 0b010, 'E': 0b011, 'H': 0b100,
@@ -213,11 +219,16 @@ class assembler:
         # values as the opcode in machine code
         
         self.opcode_table = {
-            ('MOV', 'R', 'R'): 0b01000000,  # Base opcode for MOV Register,Register
-            ('MVI', 'R', 'I'): 0b00000110,  # Base for MVI Register,Immediate
+            ('MOV', 'R', 'R'): 0b01000000,   # Base opcode for MOV Register,Register
+            ('MVI', 'R', 'I'): 0b00000110,   # Base for MVI Register,Immediate
+            ('LXI', 'RP'): 0x01,             # Base opcode for LXI RegisterPair,Immediate
             'HLT': 0x76,
             'LDA': 0x3A,
             'STA': 0x32,
+            'ADD': 0x80,                   # Base opcode for ADD; register code will be OR'ed in
+            'ADI': 0xC6,
+            'SUB': 0x90,                   # Base opcode for SUB; register code will be OR'ed in
+            'SUI': 0xD6,
         }
     #parse the line and return the parts of the line
     #remove comments and strip whitespace
@@ -235,7 +246,7 @@ class assembler:
         parts = [p.strip() for p in line.split()]
         return parts
     #get the opcode for the given mnemonic and operands
-    def get_opcode(self, mnemonic:str, dest=None, src=None)->int:
+    def get_opcode(self, mnemonic: str, dest=None, src=None) -> int:
         """Get the opcode for the given mnemonic and operands.
         
         Keyword arguments:
@@ -244,7 +255,6 @@ class assembler:
         src -- the source  (default None)
         Return: the opcode in machine code
         """
-        
         if mnemonic == 'MOV':
             base = self.opcode_table[('MOV', 'R', 'R')]
             dest_code = self.register_codes[dest] << 3
@@ -254,8 +264,23 @@ class assembler:
             base = self.opcode_table[('MVI', 'R', 'I')]
             dest_code = self.register_codes[dest] << 3
             return base | dest_code
-        
-        return self.opcode_table.get(mnemonic, None)
+        elif mnemonic == 'ADD':
+            # ADD r: opcode = 0x80 OR register code.
+            # Note: The destination (accumulator) is implicit.
+            return self.opcode_table['ADD'] | self.register_codes[src]
+        elif mnemonic == 'ADI':
+            # Immediate addition: opcode is fixed.
+            return self.opcode_table['ADI']
+        elif mnemonic == 'SUB':
+            # SUB r: opcode = 0x90 OR register code.
+            return self.opcode_table['SUB'] | self.register_codes[src]
+        elif mnemonic == 'SUI':
+            # Immediate subtraction: opcode is fixed.
+            return self.opcode_table['SUI']
+        else:
+           
+            return self.opcode_table.get(mnemonic, None)
+    
     # the actual assambling of the code into machine code
     def assemble(self, filename:str, start_address:int, cpu:CPU8085)->int:
         """ Assemble the given file into machine code and write to memory associated with a given cpu object.
@@ -332,6 +357,25 @@ class assembler:
                         cpu.write_memory(current_address + 2, (addr >> 8) & 0xFF)
                         #PC+= size of the instruction type
                         current_address += 3
+                    elif inst_format['format'] == 'RI1':
+                        # Check for valid number of operands
+                        if len(parts) != 2:
+                            raise SyntaxError(f"Invalid operands for {mnemonic} at line {line_num}")
+                        #get the immediate value
+                        imm = int(parts[1].strip('H'), 16) if parts[1].endswith('H') else int(parts[1])
+                        #write the opcode and immediate value to memory
+                        opcode = self.get_opcode(mnemonic)
+                        cpu.write_memory(current_address, opcode)
+                        cpu.write_memory(current_address + 1, imm)
+                        current_address += 2
+                    elif inst_format['format'] == 'R1':
+                        if len(parts) != 2:
+                            raise SyntaxError(f"Invalid operands for {mnemonic} at line {line_num}")
+                        
+                        reg = parts[1]
+                        opcode = self.get_opcode(mnemonic, src=reg)
+                        cpu.write_memory(current_address, opcode)
+                        current_address += 1
 
             return current_address - start_address  # Return number of bytes written
         except FileNotFoundError:
