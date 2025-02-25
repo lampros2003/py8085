@@ -1,40 +1,53 @@
 #include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
 
-// Register definitions
-static uint8_t registers[8] = {0};  // A,B,C,D,E,H,L,M
-static uint8_t flags = 0;
-static uint16_t PC = 0;
-static uint16_t SP = 0;
+typedef struct {
+    uint8_t regs[8]; // A,B,C,D,E,H,L,M
+    uint8_t flags;
+    uint16_t PC;
+    uint16_t SP;
+} Registers;
 
-__declspec(dllexport) uint8_t read_reg(uint8_t reg) {
-    if(reg < 8) return registers[reg];
+__declspec(dllexport) Registers* create_registers() {
+    Registers* r = (Registers*)malloc(sizeof(Registers));
+    memset(r, 0, sizeof(Registers));
+    return r;
+}
+
+__declspec(dllexport) void destroy_registers(Registers* r) {
+    free(r);
+}
+
+__declspec(dllexport) uint8_t read_reg(Registers* r, uint8_t reg) {
+    if (reg < 8) return r->regs[reg];
     return 0;
 }
 
-__declspec(dllexport) void write_reg(uint8_t reg, uint8_t value) {
-    if(reg < 8) registers[reg] = value;
+__declspec(dllexport) void write_reg(Registers* r, uint8_t reg, uint8_t value) {
+    if (reg < 8) r->regs[reg] = value;
 }
 
-__declspec(dllexport) uint8_t get_flags(void) {
-    return flags;
+__declspec(dllexport) uint8_t get_flags(Registers* r) {
+    return r->flags;
 }
 
-__declspec(dllexport) void set_flags(uint8_t value) {
-    flags = value;
+__declspec(dllexport) void set_flags(Registers* r, uint8_t value) {
+    r->flags = value;
 }
 
-__declspec(dllexport) uint16_t get_PC(void) {
-    return PC;
+__declspec(dllexport) uint16_t get_PC(Registers* r) {
+    return r->PC;
 }
 
-__declspec(dllexport) void set_PC(uint16_t value) {
-    PC = value;
+__declspec(dllexport) void set_PC(Registers* r, uint16_t value) {
+    r->PC = value;
 }
 
-__declspec(dllexport) uint16_t get_SP(void) {
-    return SP;
+__declspec(dllexport) uint16_t get_SP(Registers* r) {
+    return r->SP;
 }
 
-__declspec(dllexport) void set_SP(uint16_t value) {
-    SP = value;
+__declspec(dllexport) void set_SP(Registers* r, uint16_t value) {
+    r->SP = value;
 }

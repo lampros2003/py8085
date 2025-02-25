@@ -70,11 +70,19 @@ __declspec(dllexport) int execute_instruction(CPU8085Functions* cpu) {
     uint16_t pc = cpu->get_pc();
     uint8_t opcode = cpu->read_memory(pc);
     printf("Executing opcode: %02X\n", opcode);
-    printf("PC: %04X\n", pc);
-    printf("A: %02X B: %02X C: %02X D: %02X E: %02X H: %02X L: %02X\n",
+    printf("PC: %8X\n", pc);
+    printf("A: %4X B: %4X C: %4X D: %4X E: %4X H: %4X L: %4X\n",
            cpu->read_reg(REG_A), cpu->read_reg(REG_B), cpu->read_reg(REG_C),
            cpu->read_reg(REG_D), cpu->read_reg(REG_E), cpu->read_reg(REG_H),
            cpu->read_reg(REG_L));
+    printf("Carry= %d, Zero= %d, Sign= %d, Parity= %d, Aux Carry= %d\n",
+           (cpu->get_flags() & FLAG_C) ? 1 : 0,
+           (cpu->get_flags() & FLAG_Z) ? 1 : 0,
+           (cpu->get_flags() & FLAG_S) ? 1 : 0,
+           (cpu->get_flags() & FLAG_P) ? 1 : 0,
+           (cpu->get_flags() & FLAG_AC) ? 1 : 0);
+    printf("---------------------------------------\n");   
+    
 
     // --- MVI Instruction (format: 00ddd110) ---
     if ((opcode & 0xC7) == 0x06) {
@@ -168,8 +176,7 @@ __declspec(dllexport) int execute_instruction(CPU8085Functions* cpu) {
             }
             uint8_t result = A + operand;
             cpu->write_reg(REG_A, result);
-            printf("A: %02X, Operand: %02X\n", A, operand);
-            printf("Result: %02X\n", result);
+           
             update_flags(cpu, result);
             
             cpu->set_pc(pc + 1);
