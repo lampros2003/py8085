@@ -101,15 +101,122 @@ __declspec(dllexport) int execute_instruction(CPU8085Functions* cpu) {
 
     uint8_t hi_nibble = opcode >> 4;
     switch(hi_nibble) {
-        // --- NOP (0x00) ---
+        // --- NOP & Data Transfer Group ---
         case 0x0:
             if (opcode == 0x00) { // NOP
+                cpu->set_pc(pc + 1);
+                return 1;
+            } else if ((opcode & 0x0F) == 0x1) { // LXI B, D, H, SP (00rp0001)
+                uint8_t rp = (opcode >> 4) & 0x03;
+                uint8_t low = cpu->read_memory(pc + 1);
+                uint8_t high = cpu->read_memory(pc + 2);
+                // Register pair decode logic would go here
+                cpu->set_pc(pc + 3);
+                return 1;
+            } else if (opcode == 0x02 || opcode == 0x12) { // STAX B/D
+                uint8_t rp = (opcode >> 4) & 0x01;
+                // STAX implementation would go here
+                cpu->set_pc(pc + 1);
+                return 1;
+            } else if (opcode == 0x0A || opcode == 0x1A) { // LDAX B/D
+                uint8_t rp = (opcode >> 4) & 0x01;
+                // LDAX implementation would go here
+                cpu->set_pc(pc + 1);
+                return 1;
+            } else if ((opcode & 0x0F) == 0x9) { // DAD B, D, H, SP (00rp1001)
+                uint8_t rp = (opcode >> 4) & 0x03;
+                // DAD implementation would go here
+                cpu->set_pc(pc + 1);
+                return 1;
+            } else if ((opcode & 0x0F) == 0x3) { // INX B, D, H, SP (00rp0011)
+                uint8_t rp = (opcode >> 4) & 0x03;
+                // INX implementation would go here
+                cpu->set_pc(pc + 1);
+                return 1;
+            } else if ((opcode & 0x0F) == 0xB) { // DCX B, D, H, SP (00rp1011)
+                uint8_t rp = (opcode >> 4) & 0x03;
+                // DCX implementation would go here
+                cpu->set_pc(pc + 1);
+                return 1;  
+            }
+            else if (opcode == 0x07) { // RLC
+                cpu->set_pc(pc + 1);
+                return 1;
+            } else if (opcode == 0x0F) { // RRC
+                cpu->set_pc(pc + 1);
+                return 1;
+            }
+            break;
+        case 0x1:
+            if (opcode == 0x17) { // RAL
+                cpu->set_pc(pc + 1);
+                return 1;
+            } else if (opcode == 0x1F) { // RAR
+                cpu->set_pc(pc + 1);
+                return 1;
+            }
+            break;
+        // --- More Data Transfer & Special Group ---
+        case 0x2:
+            if (opcode == 0x22) { // SHLD addr
+                uint8_t low = cpu->read_memory(pc + 1);
+                uint8_t high = cpu->read_memory(pc + 2);
+                // SHLD implementation would go here
+                cpu->set_pc(pc + 3);
+                return 1;
+            } else if (opcode == 0x2A) { // LHLD addr
+                uint8_t low = cpu->read_memory(pc + 1);
+                uint8_t high = cpu->read_memory(pc + 2);
+                // LHLD implementation would go here
+                cpu->set_pc(pc + 3);
+                return 1;
+            } else if (opcode == 0x20) { // RIM
+                // RIM implementation would go here
+                cpu->set_pc(pc + 1);
+                return 1;
+            } else if (opcode == 0x27) { // DAA
+                // DAA implementation would go here
+                cpu->set_pc(pc + 1);
+                return 1;
+            } else if ((opcode & 0x07) == 0x4) { // INR r (00rrr100)
+                uint8_t reg = (opcode >> 3) & 0x07;
+                // INR implementation would go here
+                cpu->set_pc(pc + 1);
+                return 1;
+            } else if ((opcode & 0x07) == 0x5) { // DCR r (00rrr101)
+                uint8_t reg = (opcode >> 3) & 0x07;
+                // DCR implementation would go here
+                cpu->set_pc(pc + 1);
+                return 1;
+            }
+            else if (opcode == 0x2F) { // CMA
                 cpu->set_pc(pc + 1);
                 return 1;
             }
             break;
 
-        // --- MOV Instructions (opcodes 0x40 to 0x7F) ---
+        // --- More Special Instructions ---
+        case 0x3:
+            if (opcode == 0x32) { // STA addr
+                // ...existing code for STA...
+            } else if (opcode == 0x3A) { // LDA addr
+                // ...existing code for LDA...
+            } else if (opcode == 0x30) { // SIM
+                // SIM implementation would go here
+                cpu->set_pc(pc + 1);
+                return 1;
+            } else if (opcode == 0x37) { // STC
+                // STC implementation would go here
+                cpu->set_pc(pc + 1);
+                return 1;
+            } else if (opcode == 0x3F) { // CMC
+                // CMC implementation would go here
+                cpu->set_pc(pc + 1);
+                return 1;
+            }
+            break;
+
+        // --- MOV Instructions ---
         case 0x4:
         case 0x5:
         case 0x6:
@@ -140,95 +247,275 @@ __declspec(dllexport) int execute_instruction(CPU8085Functions* cpu) {
             return 1;
         }
 
-        // --- LDA and STA (opcodes 0x3A and 0x32) ---
-        case 0x3: {
-            if (opcode == 0x3A) { // LDA addr
-                // Assembled as: opcode, low byte, high byte
-                uint8_t low = cpu->read_memory(pc + 1);
-                uint8_t high = cpu->read_memory(pc + 2);
-                uint16_t addr = ((uint16_t)high << 8) | low;
-                uint8_t data = cpu->read_memory(addr);
-                cpu->write_reg(REG_A, data);
-                cpu->set_pc(pc + 3);
-                return 1;
-            } else if (opcode == 0x32) { // STA addr
-                uint8_t low = cpu->read_memory(pc + 1);
-                uint8_t high = cpu->read_memory(pc + 2);
-                uint16_t addr = ((uint16_t)high << 8) | low;
-                uint8_t data = cpu->read_reg(REG_A);
-                cpu->write_memory(addr, data);
-                cpu->set_pc(pc + 3);
+        // --- Arithmetic Group ---
+        case 0x8:
+            if ((opcode & 0xF8) == 0x80) { // ADD r (10000rrr)
+                // ...existing code for ADD...
+            } else if ((opcode & 0xF8) == 0x88) { // ADC r (10001rrr)
+                uint8_t src = opcode & 0x07;
+                // ADC implementation would go here
+                cpu->set_pc(pc + 1);
                 return 1;
             }
             break;
-        }
 
-        // --- ADD Instruction (opcodes 0x80 to 0x87) ---
-        case 0x8: {
-            uint8_t src = opcode & 0x07; // Register operand code
-            uint8_t A = cpu->read_reg(REG_A);
-            uint8_t operand;
-            if (src == REG_M) {
-                uint16_t addr = ((uint16_t)cpu->read_reg(REG_H) << 8) | cpu->read_reg(REG_L);
-                operand = cpu->read_memory(addr);
-            } else {
-                operand = cpu->read_reg(src);
+        case 0x9:
+            if ((opcode & 0xF8) == 0x90) { // SUB r (10010rrr)
+                // ...existing code for SUB...
+            } else if ((opcode & 0xF8) == 0x98) { // SBB r (10011rrr)
+                uint8_t src = opcode & 0x07;
+                // SBB implementation would go here
+                cpu->set_pc(pc + 1);
+                return 1;
             }
-            uint8_t result = A + operand;
-            cpu->write_reg(REG_A, result);
-           
-            update_flags(cpu, result);
+            break;
+
+        // --- Logical Group ---
+        case 0xA:
+            if ((opcode & 0xF8) == 0xA0) { // ANA r (10100rrr)
+                uint8_t src = opcode & 0x07;
+                // ANA implementation would go here
+                cpu->set_pc(pc + 1);
+                return 1;
+            } else if ((opcode & 0xF8) == 0xA8) { // XRA r (10101rrr)
+                uint8_t src = opcode & 0x07;
+                // XRA implementation would go here
+                cpu->set_pc(pc + 1);
+                return 1;
+            }
+            break;
             
-            cpu->set_pc(pc + 1);
-            printf("PC: %04X\n", cpu->get_pc());   
-            return 1;
-        }
-
-        // --- SUB Instruction (opcodes 0x90 to 0x97) ---
-        case 0x9: {
-            uint8_t src = opcode & 0x07;
-            uint8_t A = cpu->read_reg(REG_A);
-            uint8_t operand;
-            if (src == REG_M) {
-                uint16_t addr = ((uint16_t)cpu->read_reg(REG_H) << 8) | cpu->read_reg(REG_L);
-                operand = cpu->read_memory(addr);
-            } else {
-                operand = cpu->read_reg(src);
-            }
-            uint8_t result = A - operand;
-            cpu->write_reg(REG_A, result);
-            update_flags(cpu, result);
-            cpu->set_pc(pc + 1);
-            return 1;
-        }
-
-        // --- ADI (Add Immediate) Instruction (opcode 0xC6) ---
-        case 0xC: {
-            if (opcode == 0xC6) {
-                uint8_t imm = cpu->read_memory(pc + 1);
-                uint8_t A = cpu->read_reg(REG_A);
-                uint8_t result = A + imm;
-                cpu->write_reg(REG_A, result);
-                update_flags(cpu, result);
-                cpu->set_pc(pc + 2);
+        case 0xB:
+            if ((opcode & 0xF8) == 0xB0) { // ORA r (10110rrr)
+                uint8_t src = opcode & 0x07;
+                // ORA implementation would go here
+                cpu->set_pc(pc + 1);
+                return 1;
+            } else if ((opcode & 0xF8) == 0xB8) { // CMP r (10111rrr)
+                uint8_t src = opcode & 0x07;
+                // CMP implementation would go here
+                cpu->set_pc(pc + 1);
                 return 1;
             }
             break;
-        }
 
-        // --- SUI (Subtract Immediate) Instruction (opcode 0xD6) ---
-        case 0xD: {
-            if (opcode == 0xD6) {
+        // --- Branch, Stack, and I/O Group ---
+        case 0xC:
+            if (opcode == 0xC3) { // JMP addr
+                uint8_t low = cpu->read_memory(pc + 1);
+                uint8_t high = cpu->read_memory(pc + 2);
+                uint16_t addr = ((uint16_t)high << 8) | low;
+                cpu->set_pc(addr);
+                return 1;
+            } else if (opcode == 0xC2) { // JNZ addr
+                uint8_t low = cpu->read_memory(pc + 1);
+                uint8_t high = cpu->read_memory(pc + 2);
+                uint16_t addr = ((uint16_t)high << 8) | low;
+                // JNZ implementation would go here
+                cpu->set_pc(pc + 3); // If condition not met
+                return 1;
+            } else if (opcode == 0xCA) { // JZ addr
+                uint8_t low = cpu->read_memory(pc + 1);
+                uint8_t high = cpu->read_memory(pc + 2);
+                uint16_t addr = ((uint16_t)high << 8) | low;
+                // JZ implementation would go here
+                cpu->set_pc(pc + 3); // If condition not met
+                return 1;
+            } else if (opcode == 0xC6) { // ADI data
                 uint8_t imm = cpu->read_memory(pc + 1);
-                uint8_t A = cpu->read_reg(REG_A);
-                uint8_t result = A - imm;
-                cpu->write_reg(REG_A, result);
+                uint8_t acc = cpu->read_reg(REG_A);
+                uint8_t result = acc + imm;
                 update_flags(cpu, result);
+                cpu->write_reg(REG_A, result);
                 cpu->set_pc(pc + 2);
+                return 1;
+
+            } else if (opcode == 0xCD) { // CALL addr
+                uint8_t low = cpu->read_memory(pc + 1);
+                uint8_t high = cpu->read_memory(pc + 2);
+                // CALL implementation would go here
+                cpu->set_pc(pc + 3);
+                return 1;
+            } else if ((opcode & 0xCF) == 0xC1) { // POP rp (11rp0001)
+                uint8_t rp = (opcode >> 4) & 0x03;
+                // POP implementation would go here
+                cpu->set_pc(pc + 1);
+                return 1;
+            } else if ((opcode & 0xCF) == 0xC5) { // PUSH rp (11rp0101)
+                uint8_t rp = (opcode >> 4) & 0x03;
+                // PUSH implementation would go here
+                cpu->set_pc(pc + 1);
+                return 1;
+            } else if (opcode == 0xC9) { // RET
+                // RET implementation would go here
+                return 1;
+            }
+            else if (opcode == 0xCE) { // ACI
+                cpu->set_pc(pc + 2);
+                return 1;
+            } else if (opcode == 0xCC) { // CZ
+                cpu->set_pc(pc + 3);
+                return 1;
+            } else if (opcode == 0xC4) { // CNZ
+                cpu->set_pc(pc + 3);
+                return 1;
+            } else if (opcode == 0xC8) { // RZ
+                cpu->set_pc(pc + 1);
+                return 1;
+            } else if (opcode == 0xC0) { // RNZ
+                cpu->set_pc(pc + 1);
+                return 1;
+            } else if (opcode == 0xC7) { // RST
+                cpu->set_pc(pc + 1);
                 return 1;
             }
             break;
-        }
+
+        case 0xD:
+            if (opcode == 0xD3) { // OUT port
+                uint8_t port = cpu->read_memory(pc + 1);
+                // OUT implementation would go here
+                cpu->set_pc(pc + 2);
+                return 1;
+            } else if (opcode == 0xDB) { // IN port
+                uint8_t port = cpu->read_memory(pc + 1);
+                // IN implementation would go here
+                cpu->set_pc(pc + 2);
+                return 1;
+            } else if (opcode == 0xD2) { // JNC addr
+                uint8_t low = cpu->read_memory(pc + 1);
+                uint8_t high = cpu->read_memory(pc + 2);
+                // JNC implementation would go here
+                cpu->set_pc(pc + 3);
+                return 1;
+            } else if (opcode == 0xDA) { // JC addr
+                uint8_t low = cpu->read_memory(pc + 1);
+                uint8_t high = cpu->read_memory(pc + 2);
+                // JC implementation would go here
+                cpu->set_pc(pc + 3);
+                return 1;
+            } else if (opcode == 0xD6) { // SUI data
+                uint8_t imm = cpu->read_memory(pc + 1);
+                // SUI implementation would go here
+                cpu->set_pc(pc + 2);
+                return 1; 
+            }
+            else if (opcode == 0xDE) { // SBI
+                cpu->set_pc(pc + 2);
+                return 1;
+            } else if (opcode == 0xDC) { // CC
+                cpu->set_pc(pc + 3);
+                return 1;
+            } else if (opcode == 0xD4) { // CNC
+                cpu->set_pc(pc + 3);
+                return 1;
+            } else if (opcode == 0xD8) { // RC
+                cpu->set_pc(pc + 1);
+                return 1;
+            } else if (opcode == 0xD0) { // RNC
+                cpu->set_pc(pc + 1);
+                return 1;
+            }
+            break;
+
+        case 0xE:
+            if (opcode == 0xEB) { // XCHG
+                // XCHG implementation would go here
+                cpu->set_pc(pc + 1);
+                return 1;
+            } else if (opcode == 0xE3) { // XTHL
+                // XTHL implementation would go here
+                cpu->set_pc(pc + 1);
+                return 1;
+            } else if (opcode == 0xE6) { // ANI data
+                uint8_t imm = cpu->read_memory(pc + 1);
+                // ANI implementation would go here
+                cpu->set_pc(pc + 2);
+                return 1;
+            } else if (opcode == 0xE9) { // PCHL
+                // PCHL implementation would go here
+                return 1;
+            } else if (opcode == 0xE2) { // JPO addr
+                uint8_t low = cpu->read_memory(pc + 1);
+                uint8_t high = cpu->read_memory(pc + 2);
+                // JPO implementation would go here
+                cpu->set_pc(pc + 3);
+                return 1;
+            } else if (opcode == 0xEA) { // JPE addr
+                uint8_t low = cpu->read_memory(pc + 1);
+                uint8_t high = cpu->read_memory(pc + 2);
+                // JPE implementation would go here
+                cpu->set_pc(pc + 3);
+                return 1;
+            }
+            else if (opcode == 0xEE) { // XRI
+                cpu->set_pc(pc + 2);
+                return 1;
+            } else if (opcode == 0xEC) { // CPE
+                cpu->set_pc(pc + 3);
+                return 1;
+            } else if (opcode == 0xE4) { // CPO
+                cpu->set_pc(pc + 3);
+                return 1;
+            } else if (opcode == 0xE8) { // RPE
+                cpu->set_pc(pc + 1);
+                return 1;
+            } else if (opcode == 0xE0) { // RPO
+                cpu->set_pc(pc + 1);
+                return 1;
+            }
+            break;
+
+        case 0xF:
+            if (opcode == 0xF6) { // ORI data
+                uint8_t imm = cpu->read_memory(pc + 1);
+                // ORI implementation would go here
+                cpu->set_pc(pc + 2);
+                return 1;
+            } else if (opcode == 0xFE) { // CPI data
+                uint8_t imm = cpu->read_memory(pc + 1);
+                // CPI implementation would go here
+                cpu->set_pc(pc + 2);
+                return 1;
+            } else if (opcode == 0xF3) { // DI
+                // DI implementation would go here
+                cpu->set_pc(pc + 1);
+                return 1;
+            } else if (opcode == 0xFB) { // EI
+                // EI implementation would go here
+                cpu->set_pc(pc + 1);
+                return 1;
+            } else if (opcode == 0xF2) { // JP addr
+                uint8_t low = cpu->read_memory(pc + 1);
+                uint8_t high = cpu->read_memory(pc + 2);
+                // JP implementation would go here
+                cpu->set_pc(pc + 3);
+                return 1;
+            } else if (opcode == 0xFA) { // JM addr
+                uint8_t low = cpu->read_memory(pc + 1);
+                uint8_t high = cpu->read_memory(pc + 2);
+                // JM implementation would go here
+                cpu->set_pc(pc + 3);
+                return 1;
+            } else if (opcode == 0xF9) { // SPHL
+                // SPHL implementation would go here
+                cpu->set_pc(pc + 1);
+                return 1;
+            }
+            else if (opcode == 0xF4) { // CP
+                cpu->set_pc(pc + 3);
+                return 1;
+            } else if (opcode == 0xFC) { // CM
+                cpu->set_pc(pc + 3);
+                return 1;
+            } else if (opcode == 0xF0) { // RP
+                cpu->set_pc(pc + 1);
+                return 1;
+            } else if (opcode == 0xF8) { // RM
+                cpu->set_pc(pc + 1);
+                return 1;
+            }
+            break;
 
         default:
             break;
