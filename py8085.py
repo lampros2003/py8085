@@ -1,15 +1,6 @@
 from ctypes import *
 import os
-# Load the DLLs 
-try:
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    memory_dll = CDLL(os.path.join(current_dir, 'memory.dll'))
-    registers_dll = CDLL(os.path.join(current_dir, 'registers.dll'))
-    executor_dll = CDLL(os.path.join(current_dir, 'executor.dll'))
-except Exception as e:
-    print(f"Error loading DLLs: {e}")
-    exit(1)
-             
+
 class CPU8085Functions(Structure):
     """Structure holding function pointers for the CPU executor."""
     _fields_ = [
@@ -25,81 +16,45 @@ class CPU8085Functions(Structure):
         ("set_sp", CFUNCTYPE(None, c_uint16))
     ]
 
-# Configure DLL  for memory
-memory_dll.create_memory.restype = c_void_p
-memory_dll.destroy_memory.argtypes = [c_void_p]
-memory_dll.read_memory.argtypes = [c_void_p, c_uint16]
-memory_dll.read_memory.restype = c_uint8
-memory_dll.write_memory.argtypes = [c_void_p, c_uint16, c_uint8]
-
-# Configure DLL  for registers
-# It is possible now to create other memory definitions in c as long as they meet the specifications
-registers_dll.create_registers.restype = c_void_p
-registers_dll.destroy_registers.argtypes = [c_void_p]
-registers_dll.read_reg.argtypes = [c_void_p, c_uint8]
-registers_dll.read_reg.restype = c_uint8
-registers_dll.write_reg.argtypes = [c_void_p, c_uint8, c_uint8]
-registers_dll.get_flags.argtypes = [c_void_p]
-registers_dll.get_flags.restype = c_uint8
-registers_dll.set_flags.argtypes = [c_void_p, c_uint8]
-registers_dll.get_PC.argtypes = [c_void_p]
-registers_dll.get_PC.restype = c_uint16
-registers_dll.set_PC.argtypes = [c_void_p, c_uint16]
-registers_dll.get_SP.argtypes = [c_void_p]
-registers_dll.get_SP.restype = c_uint16
-registers_dll.set_SP.argtypes = [c_void_p, c_uint16]
-
-# Configure DLL  for executor
-executor_dll.execute_instruction.argtypes = [POINTER(CPU8085Functions)]
-executor_dll.execute_instruction.restype = c_int
-
 class Memory:
     """Wrapper for the memory DLL functions."""
     
-    def __init__(self):
+    def __init__(self, dll_name='memory.dll'):
         """
         Initialize a Memory object.
 
         Keyword arguments:
-        None --
+        dll_name -- name of the Memory DLL file (default: 'memory.dll')
 
         Return: None
         """
-        self.handle = memory_dll.create_memory()
+        try:
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            self.dll = CDLL(os.path.join(current_dir, dll_name))
+            
+            # Configure DLL functions
+            self.dll.create_memory.restype = c_void_p
+            self.dll.destroy_memory.argtypes = [c_void_p]
+            self.dll.read_memory.argtypes = [c_void_p, c_uint16]
+            self.dll.read_memory.restype = c_uint8
+            self.dll.write_memory.argtypes = [c_void_p, c_uint16, c_uint8]
+            
+            self.handle = self.dll.create_memory()
+        except Exception as e:
+            print(f"Error loading Memory DLL '{dll_name}': {e}")
+            raise
         
     def __del__(self):
-        """
-        Destructor for Memory object.
-
-        Keyword arguments:
-        None --
-
-        Return: None
-        """
-        memory_dll.destroy_memory(self.handle)
+        """Destructor for Memory object."""
+        self.dll.destroy_memory(self.handle)
         
     def read(self, address):
-        """
-        Read a single byte from memory.
-
-        Keyword arguments:
-        address -- memory address to read from (int)
-
-        Return: the byte read (int)
-        """
-        return memory_dll.read_memory(self.handle, c_uint16(address))
+        """Read a single byte from memory."""
+        return self.dll.read_memory(self.handle, c_uint16(address))
         
     def write(self, address, value):
-        """
-        Write a single byte to memory.
-
-        Keyword arguments:
-        address -- memory address to write to (int)
-        value -- value to write (int)
-
-        Return: None
-        """
-        memory_dll.write_memory(self.handle, c_uint16(address), c_uint8(value))
+        """Write a single byte to memory."""
+        self.dll.write_memory(self.handle, c_uint16(address), c_uint8(value))
 
 class Registers:
     """Wrapper for the registers DLL functions."""
@@ -109,146 +64,111 @@ class Registers:
         'E': 4, 'H': 5, 'L': 6, 'M': 7
     }
     
-    def __init__(self):
+    def __init__(self, dll_name='registers.dll'):
         """
         Initialize a Registers object.
 
         Keyword arguments:
-        None --
+        dll_name -- name of the Registers DLL file (default: 'registers.dll')
 
         Return: None
         """
-        self.handle = registers_dll.create_registers()
+        try:
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            self.dll = CDLL(os.path.join(current_dir, dll_name))
+            
+            # Configure DLL functions
+            self.dll.create_registers.restype = c_void_p
+            self.dll.destroy_registers.argtypes = [c_void_p]
+            self.dll.read_reg.argtypes = [c_void_p, c_uint8]
+            self.dll.read_reg.restype = c_uint8
+            self.dll.write_reg.argtypes = [c_void_p, c_uint8, c_uint8]
+            self.dll.get_flags.argtypes = [c_void_p]
+            self.dll.get_flags.restype = c_uint8
+            self.dll.set_flags.argtypes = [c_void_p, c_uint8]
+            self.dll.get_PC.argtypes = [c_void_p]
+            self.dll.get_PC.restype = c_uint16
+            self.dll.set_PC.argtypes = [c_void_p, c_uint16]
+            self.dll.get_SP.argtypes = [c_void_p]
+            self.dll.get_SP.restype = c_uint16
+            self.dll.set_SP.argtypes = [c_void_p, c_uint16]
+            
+            self.handle = self.dll.create_registers()
+        except Exception as e:
+            print(f"Error loading Registers DLL '{dll_name}': {e}")
+            raise
         
     def __del__(self):
-        """
-        Destructor for Registers object.
-
-        Keyword arguments:
-        None --
-
-        Return: None
-        """
-        registers_dll.destroy_registers(self.handle)
+        """Destructor for Registers object."""
+        self.dll.destroy_registers(self.handle)
         
     def read_reg(self, regname):
-        """
-        Read the value from a register.
-
-        Keyword arguments:
-        regname -- register name as a string (e.g. 'A', 'B', etc.)
-
-        Return: register contents (int)
-        """
+        """Read the value from a register."""
         reg_num = self.REG_MAP.get(regname, -1)
         if reg_num >= 0:
-            return registers_dll.read_reg(self.handle, c_uint8(reg_num))
+            return self.dll.read_reg(self.handle, c_uint8(reg_num))
         return 0
         
     def write_reg(self, regname, value):
-        """
-        Write a value to a register.
-
-        Keyword arguments:
-        regname -- register name as a string (e.g. 'A', 'B', etc.)
-        value -- value to write to register (int)
-
-        Return: None
-        """
+        """Write a value to a register."""
         reg_num = self.REG_MAP.get(regname, -1)
         if reg_num >= 0:
-            registers_dll.write_reg(self.handle, c_uint8(reg_num), c_uint8(value))
+            self.dll.write_reg(self.handle, c_uint8(reg_num), c_uint8(value))
             
     def get_flags(self):
-        """
-        Get the flags register.
-
-        Keyword arguments:
-        None --
-
-        Return: flags register contents (int)
-        """
-        return registers_dll.get_flags(self.handle)
+        """Get the flags register."""
+        return self.dll.get_flags(self.handle)
         
     def set_flags(self, value):
-        """
-        Set the flags register.
-
-        Keyword arguments:
-        value -- new flags value (int)
-
-        Return: None
-        """
-        registers_dll.set_flags(self.handle, c_uint8(value))
+        """Set the flags register."""
+        self.dll.set_flags(self.handle, c_uint8(value))
         
     def get_PC(self):
-        """
-        Get the value of the program counter.
-
-        Keyword arguments:
-        None --
-
-        Return: program counter (int)
-        """
-        return registers_dll.get_PC(self.handle)
+        """Get the value of the program counter."""
+        return self.dll.get_PC(self.handle)
         
     def set_PC(self, value):
-        """
-        Set the value of the program counter.
-
-        Keyword arguments:
-        value -- new program counter value (int)
-
-        Return: None
-        """
-        registers_dll.set_PC(self.handle, c_uint16(value))
+        """Set the value of the program counter."""
+        self.dll.set_PC(self.handle, c_uint16(value))
         
     def get_SP(self):
-        """
-        Get the value of the stack pointer.
-
-        Keyword arguments:
-        None --
-
-        Return: stack pointer (int)
-        """
-        return registers_dll.get_SP(self.handle)
+        """Get the value of the stack pointer."""
+        return self.dll.get_SP(self.handle)
         
     def set_SP(self, value):
-        """
-        Set the value of the stack pointer.
-
-        Keyword arguments:
-        value -- new stack pointer value (int)
-
-        Return: None
-        """
-        registers_dll.set_SP(self.handle, c_uint16(value))
+        """Set the value of the stack pointer."""
+        self.dll.set_SP(self.handle, c_uint16(value))
 
 class Executor:
     """Wrapper for the executor DLL functions."""
     
-    def __init__(self, cpu):
+    def __init__(self, cpu, dll_name='executor.dll'):
         """
         Initialize an Executor object.
 
         Keyword arguments:
         cpu -- CPU8085 object to link the executor with
+        dll_name -- name of the Executor DLL file (default: 'executor.dll')
 
         Return: None
         """
         self.cpu = cpu
+        
+        try:
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            self.dll = CDLL(os.path.join(current_dir, dll_name))
+            
+            # Configure DLL functions
+            self.dll.execute_instruction.argtypes = [POINTER(CPU8085Functions)]
+            self.dll.execute_instruction.restype = c_int
+        except Exception as e:
+            print(f"Error loading Executor DLL '{dll_name}': {e}")
+            raise
+            
         self.cpu_funcs = self._setup_cpu_functions()
         
     def _setup_cpu_functions(self):
-        """
-        Setup the CPU8085Functions structure with Python callbacks.
-
-        Keyword arguments:
-        None --
-
-        Return: configured CPU8085Functions structure
-        """
+        """Setup the CPU8085Functions structure with Python callbacks."""
         cpu_funcs = CPU8085Functions()
         
         @CFUNCTYPE(c_uint8, c_uint16)
@@ -308,34 +228,31 @@ class Executor:
         cpu_funcs.set_sp = set_sp_cb
         
         return cpu_funcs
-        
+
     def execute_instruction(self):
-        """
-        Execute a single instruction using the linked CPU8085Functions.
-
-        Keyword arguments:
-        None --
-
-        Return: result code from the executor (int)
-        """
-        return executor_dll.execute_instruction(byref(self.cpu_funcs))
+        """Execute a single instruction using the linked CPU8085Functions."""
+        return self.dll.execute_instruction(byref(self.cpu_funcs))
 
 class CPU8085:
     """CPU8085 class to emulate an 8085 CPU."""
     
-    def __init__(self, memory=None, registers=None):
+    def __init__(self, memory=None, registers=None, 
+                 memory_dll='memory.dll', registers_dll='registers.dll', executor_dll='executor.dll'):
         """
         Construct a CPU8085 object.
 
         Keyword arguments:
         memory -- Memory object to use for memory operations (default None)
         registers -- Registers object to use for register operations (default None)
+        memory_dll -- Name of the Memory DLL file if memory is None (default: 'memory.dll')
+        registers_dll -- Name of the Registers DLL file if registers is None (default: 'registers.dll')
+        executor_dll -- Name of the Executor DLL file (default: 'executor.dll')
 
         Return: CPU8085 object
         """
-        self.memory = memory if memory else Memory()
-        self.registers = registers if registers else Registers()
-        self.executor = Executor(self)
+        self.memory = memory if memory else Memory(dll_name=memory_dll)
+        self.registers = registers if registers else Registers(dll_name=registers_dll)
+        self.executor = Executor(self, dll_name=executor_dll)
         
         self.set_PC(0)
         self.set_SP(0xF000)

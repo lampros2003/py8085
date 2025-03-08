@@ -3,14 +3,14 @@
 #include <stdio.h>
 
 // Function prototypes for memory access
-typedef uint8_t (*ReadMemoryFunc)(uint16_t address);
-typedef void (*WriteMemoryFunc)(uint16_t address, uint8_t value);
+typedef int8_t (*ReadMemoryFunc)(uint16_t address);
+typedef void (*WriteMemoryFunc)(uint16_t address, int8_t value);
 
 // Function prototypes for register access
-typedef uint8_t (*ReadRegFunc)(uint8_t reg);
-typedef void (*WriteRegFunc)(uint8_t reg, uint8_t value);
-typedef uint8_t (*GetFlagsFunc)(void);
-typedef void (*SetFlagsFunc)(uint8_t value);
+typedef int8_t (*ReadRegFunc)(int8_t reg);
+typedef void (*WriteRegFunc)(int8_t reg, int8_t value);
+typedef int8_t (*GetFlagsFunc)(void);
+typedef void (*SetFlagsFunc)(int8_t value);
 typedef uint16_t (*GetPCFunc)(void);
 typedef void (*SetPCFunc)(uint16_t value);
 typedef uint16_t (*GetSPFunc)(void);
@@ -47,8 +47,8 @@ typedef struct {
 #define REG_M 6
 #define REG_A 7
 
-static void update_flags(CPU8085Functions* cpu, uint8_t result) {
-    uint8_t flags = 0;
+static void update_flags(CPU8085Functions* cpu, int8_t result) {
+    int8_t flags = 0;
 
     // Sign flag
     if (result & 0x80) flags |= FLAG_S;
@@ -57,7 +57,7 @@ static void update_flags(CPU8085Functions* cpu, uint8_t result) {
     if (result == 0) flags |= FLAG_Z;
 
     // Parity flag calculation
-    uint8_t parity = result;
+    int8_t parity = result;
     parity ^= parity >> 4;
     parity ^= parity >> 2;
     parity ^= parity >> 1;
@@ -65,10 +65,12 @@ static void update_flags(CPU8085Functions* cpu, uint8_t result) {
 
     cpu->set_flags(flags);
 }
+int accum ;
+int temp;
 
 __declspec(dllexport) int execute_instruction(CPU8085Functions* cpu) {
     uint16_t pc = cpu->get_pc();
-    uint8_t opcode = cpu->read_memory(pc);
+    int8_t opcode = cpu->read_memory(pc);
     printf("Executing opcode: %02X\n", opcode);
     printf("PC: %8X\n", pc);
     printf("A: %4X B: %4X C: %4X D: %4X E: %4X H: %4X L: %4X\n",
@@ -87,8 +89,8 @@ __declspec(dllexport) int execute_instruction(CPU8085Functions* cpu) {
     
     // --- MVI Instruction (format: 00ddd110) ---
     if ((opcode & 0xC7) == 0x06) {
-        uint8_t dest = (opcode >> 3) & 0x07;
-        uint8_t imm = cpu->read_memory(pc + 1);
+        int8_t dest = (opcode >> 3) & 0x07;
+        int8_t imm = cpu->read_memory(pc + 1);
         if (dest == REG_M) {
             // For MVI M, the effective address is in the register pair H and L.
             uint16_t addr = ((uint16_t)cpu->read_reg(REG_H) << 8) | cpu->read_reg(REG_L);
@@ -101,7 +103,7 @@ __declspec(dllexport) int execute_instruction(CPU8085Functions* cpu) {
     }
 
     // Switch based on the first two bits of the opcode
-    uint8_t hi_bits = opcode >> 6;
+    int8_t hi_bits = opcode >> 6;
     switch(hi_bits) {
         // 00: Miscellaneous and register operations
         case 0x0:
@@ -109,41 +111,128 @@ __declspec(dllexport) int execute_instruction(CPU8085Functions* cpu) {
                 cpu->set_pc(pc + 1);
                 return 1;
             } else if ((opcode & 0x0F) == 0x1) { // LXI B, D, H, SP (00rp0001)
-                uint8_t rp = (opcode >> 4) & 0x03;
-                uint8_t low = cpu->read_memory(pc + 1);
-                uint8_t high = cpu->read_memory(pc + 2);
-                // Register pair decode logic would go here
+                int8_t rp = (opcode >> 4) & 0x03;
+                int8_t low = cpu->read_memory(pc + 1);
+                int8_t high = cpu->read_memory(pc + 2);
+                switch (rp) {
+                    case 0: // BC
+                        cpu->write_reg(REG_C, low);
+                        cpu->write_reg(REG_B, high);
+                        break;
+                    case 1: // DE
+                        cpu->write_reg(REG_E, low);
+                        cpu->write_reg(REG_D, high);
+                        break;
+                    case 2: // HL
+                        cpu->write_reg(REG_L, low);
+                        cpu->write_reg(REG_H, high);
+                        break;
+                    case 3: // SP
+                        cpu->set_sp(((uint16_t)high << 8) | low);
+                        break;
+                }
+                
                 cpu->set_pc(pc + 3);
                 return 1;
             } else if (opcode == 0x02 || opcode == 0x12) { // STAX B/D
-                uint8_t rp = (opcode >> 4) & 0x01;
-                // STAX implementation would go here
+                int8_t rp = (opcode >> 4) & 0x01;
+                //fetch the value from the accumulator and store it in the memory location pointed by the register pair
+                int8_t value = cpu->read_reg(REG_A);
+                uint16_t addr;
+                switch (rp) {
+                    case 0: // BC
+                        addr= ((uint16_t)cpu->read_reg(REG_B) << 8) | cpu->read_reg(REG_C);
+                        cpu->write_memory(addr, value);
+                       break;
+                    case 1: // DE
+                        addr = ((uint16_t)cpu->read_reg(REG_D) << 8) | cpu->read_reg(REG_E);
+                        cpu->write_memory(addr, value);
+                        break;
+                    case 2: // HL
+                        addr = ((uint16_t)cpu->read_reg(REG_H) << 8) | cpu->read_reg(REG_L);
+                        cpu->write_memory(addr, value);
+                        break;
+                    case 3: // SP
+                        addr = cpu->get_sp();
+                        cpu->write_memory(addr, value);
+                        break;
+                       
+                }
                 cpu->set_pc(pc + 1);
                 return 1;
             } else if (opcode == 0x0A || opcode == 0x1A) { // LDAX B/D
-                uint8_t rp = (opcode >> 4) & 0x01;
+                int8_t rp = (opcode >> 4) & 0x01;
                 // LDAX implementation would go here
                 cpu->set_pc(pc + 1);
                 return 1;
             } else if ((opcode & 0x0F) == 0x9) { // DAD B, D, H, SP (00rp1001)
-                uint8_t rp = (opcode >> 4) & 0x03;
+                int8_t rp = (opcode >> 4) & 0x03;
                 // DAD implementation would go here
                 cpu->set_pc(pc + 1);
                 return 1;
             } else if ((opcode & 0x0F) == 0x3) { // INX B, D, H, SP (00rp0011)
-                uint8_t rp = (opcode >> 4) & 0x03;
+                int8_t rp = (opcode >> 4) & 0x03;
                 // INX implementation would go here
                 cpu->set_pc(pc + 1);
                 return 1;
-            } else if ((opcode & 0x0F) == 0xB) { // DCX B, D, H, SP (00rp1011)
-                uint8_t rp = (opcode >> 4) & 0x03;
-                // DCX implementation would go here
+            } else if ((opcode & 0x0F) == 0xB) { // DCX B, D, H, SP (00rp1011) implemented
+                int8_t rp = (opcode >> 4) & 0x03;
+                switch (rp) {
+                    case 0: // BC
+                        temp = cpu->read_reg(REG_C);
+                        temp--;
+                        if(temp < 0)
+                        {
+                            cpu->write_reg(REG_C, 0xFF);
+                            cpu->write_reg(REG_B, cpu->read_reg(REG_B)-1);
+                        }
+                        else
+                        {
+                            cpu->write_reg(REG_C, temp);
+                        }
+                        break;
+                    case 1: // DE
+                        temp = cpu->read_reg(REG_E);
+                        temp--;
+                        if(temp < 0)
+                        {
+                            cpu->write_reg(REG_E, 0xFF);
+                            cpu->write_reg(REG_D, cpu->read_reg(REG_D)-1);
+                        }
+                        else
+                        {
+                            cpu->write_reg(REG_E, temp);
+                        }
+                        break;
+                    case 2: // HL
+                        temp = cpu->read_reg(REG_L);
+                        temp--;
+                        if(temp < 0)
+                        {
+                            cpu->write_reg(REG_L, 0xFF);
+                            cpu->write_reg(REG_H, cpu->read_reg(REG_H)-1);
+                        }
+                        else
+                        {
+                            cpu->write_reg(REG_L, temp);
+                        }
+                        break;
+                    case 3: // SP
+                        temp = cpu->get_sp();
+                        temp--;
+                        cpu->set_sp(temp);
+                        break;
+                }
+                
                 cpu->set_pc(pc + 1);
                 return 1;  
             } else if (opcode == 0x07) { // RLC
+                
+
                 cpu->set_pc(pc + 1);
                 return 1;
             } else if (opcode == 0x0F) { // RRC
+
                 cpu->set_pc(pc + 1);
                 return 1;
             } else if (opcode == 0x17) { // RAL
@@ -153,14 +242,14 @@ __declspec(dllexport) int execute_instruction(CPU8085Functions* cpu) {
                 cpu->set_pc(pc + 1);
                 return 1;
             } else if (opcode == 0x22) { // SHLD addr
-                uint8_t low = cpu->read_memory(pc + 1);
-                uint8_t high = cpu->read_memory(pc + 2);
+                int8_t low = cpu->read_memory(pc + 1);
+                int8_t high = cpu->read_memory(pc + 2);
                 // SHLD implementation would go here
                 cpu->set_pc(pc + 3);
                 return 1;
             } else if (opcode == 0x2A) { // LHLD addr
-                uint8_t low = cpu->read_memory(pc + 1);
-                uint8_t high = cpu->read_memory(pc + 2);
+                int8_t low = cpu->read_memory(pc + 1);
+                int8_t high = cpu->read_memory(pc + 2);
                 // LHLD implementation would go here
                 cpu->set_pc(pc + 3);
                 return 1;
@@ -173,12 +262,12 @@ __declspec(dllexport) int execute_instruction(CPU8085Functions* cpu) {
                 cpu->set_pc(pc + 1);
                 return 1;
             } else if ((opcode & 0x07) == 0x4) { // INR r (00rrr100)
-                uint8_t reg = (opcode >> 3) & 0x07;
+                int8_t reg = (opcode >> 3) & 0x07;
                 // INR implementation would go here
                 cpu->set_pc(pc + 1);
                 return 1;
             } else if ((opcode & 0x07) == 0x5) { // DCR r (00rrr101)
-                uint8_t reg = (opcode >> 3) & 0x07;
+                int8_t reg = (opcode >> 3) & 0x07;
                 // DCR implementation would go here
                 cpu->set_pc(pc + 1);
                 return 1;
@@ -195,9 +284,9 @@ __declspec(dllexport) int execute_instruction(CPU8085Functions* cpu) {
                 // Halt execution
                 return 0;
             }
-            uint8_t dest = (opcode >> 3) & 0x07;
-            uint8_t src  = opcode & 0x07;
-            uint8_t value;
+            int8_t dest = (opcode >> 3) & 0x07;
+            int8_t src  = opcode & 0x07;
+            int8_t value;
             // If source is memory (M), read from address in H and L.
             if (src == REG_M) {
                 uint16_t addr = ((uint16_t)cpu->read_reg(REG_H) << 8) | cpu->read_reg(REG_L);
@@ -218,46 +307,46 @@ __declspec(dllexport) int execute_instruction(CPU8085Functions* cpu) {
         // 10: Arithmetic and logical operations
         case 0x2:
             if ((opcode & 0xF8) == 0x80) { // ADD r (10000rrr)
-                uint8_t src = opcode & 0x07;
-                uint8_t result = cpu->read_reg(REG_A) + cpu->read_reg(src);
+                int8_t src = opcode & 0x07;
+                int8_t result = cpu->read_reg(REG_A) + cpu->read_reg(src);
                 update_flags(cpu, result);
                 cpu->write_reg(REG_A, result);
                 cpu->set_pc(pc + 1);
                 return 1;
             } else if ((opcode & 0xF8) == 0x88) { // ADC r (10001rrr)
-                uint8_t src = opcode & 0x07;
+                int8_t src = opcode & 0x07;
                 // ADC implementation would go here
                 cpu->set_pc(pc + 1);
                 return 1;
             } else if ((opcode & 0xF8) == 0x90) { // SUB r (10010rrr)
-                uint8_t src = opcode & 0x07;
-                uint8_t result = cpu->read_reg(REG_A) - cpu->read_reg(src);
+                int8_t src = opcode & 0x07;
+                int8_t result = cpu->read_reg(REG_A) - cpu->read_reg(src);
                 update_flags(cpu, result);
                 cpu->write_reg(REG_A, result);
                 cpu->set_pc(pc + 1);
                 return 1;
             } else if ((opcode & 0xF8) == 0x98) { // SBB r (10011rrr)
-                uint8_t src = opcode & 0x07;
+                int8_t src = opcode & 0x07;
                 // SBB implementation would go here
                 cpu->set_pc(pc + 1);
                 return 1;
             } else if ((opcode & 0xF8) == 0xA0) { // ANA r (10100rrr)
-                uint8_t src = opcode & 0x07;
+                int8_t src = opcode & 0x07;
                 // ANA implementation would go here
                 cpu->set_pc(pc + 1);
                 return 1;
             } else if ((opcode & 0xF8) == 0xA8) { // XRA r (10101rrr)
-                uint8_t src = opcode & 0x07;
+                int8_t src = opcode & 0x07;
                 // XRA implementation would go here
                 cpu->set_pc(pc + 1);
                 return 1;
             } else if ((opcode & 0xF8) == 0xB0) { // ORA r (10110rrr)
-                uint8_t src = opcode & 0x07;
+                int8_t src = opcode & 0x07;
                 // ORA implementation would go here
                 cpu->set_pc(pc + 1);
                 return 1;
             } else if ((opcode & 0xF8) == 0xB8) { // CMP r (10111rrr)
-                uint8_t src = opcode & 0x07;
+                int8_t src = opcode & 0x07;
                 // CMP implementation would go here
                 cpu->set_pc(pc + 1);
                 return 1;
@@ -268,14 +357,14 @@ __declspec(dllexport) int execute_instruction(CPU8085Functions* cpu) {
         case 0x3:
             
             if (opcode == 0xC3) { // JMP addr
-                uint8_t low = cpu->read_memory(pc + 1);
-                uint8_t high = cpu->read_memory(pc + 2);
+                int8_t low = cpu->read_memory(pc + 1);
+                int8_t high = cpu->read_memory(pc + 2);
                 uint16_t addr = ((uint16_t)high << 8) | low;
                 cpu->set_pc(addr);
                 return 1;
             } else if (opcode == 0xC2) { // JNZ addr
-                uint8_t low = cpu->read_memory(pc + 1);
-                uint8_t high = cpu->read_memory(pc + 2);
+                int8_t low = cpu->read_memory(pc + 1);
+                int8_t high = cpu->read_memory(pc + 2);
                 uint16_t addr = ((uint16_t)high << 8) | low;
                 if (!(cpu->get_flags() & FLAG_Z)) {
                     cpu->set_pc(addr);
@@ -284,8 +373,8 @@ __declspec(dllexport) int execute_instruction(CPU8085Functions* cpu) {
                 }
                 return 1;
             } else if (opcode == 0xCA) { // JZ addr
-                uint8_t low = cpu->read_memory(pc + 1);
-                uint8_t high = cpu->read_memory(pc + 2);
+                int8_t low = cpu->read_memory(pc + 1);
+                int8_t high = cpu->read_memory(pc + 2);
                 uint16_t addr = ((uint16_t)high << 8) | low;
                 if (cpu->get_flags() & FLAG_Z) {
                     cpu->set_pc(addr);
@@ -294,22 +383,22 @@ __declspec(dllexport) int execute_instruction(CPU8085Functions* cpu) {
                 }
                 return 1;
             } else if (opcode == 0xC6) { // ADI data
-                uint8_t result = cpu->read_reg(REG_A) + cpu->read_memory(pc + 1);
+                int8_t result = cpu->read_reg(REG_A) + cpu->read_memory(pc + 1);
                 update_flags(cpu, result);
                 cpu->write_reg(REG_A, result);
                 cpu->set_pc(pc + 2);
                 return 1;
             } else if (opcode == 0xCD) { // CALL addr
-                uint8_t low = cpu->read_memory(pc + 1);
-                uint8_t high = cpu->read_memory(pc + 2);
+                int8_t low = cpu->read_memory(pc + 1);
+                int8_t high = cpu->read_memory(pc + 2);
                 // CALL implementation would go here
                 cpu->set_pc(pc + 3);
                 return 1;
             } else if ((opcode & 0xCF) == 0xC1) { // POP rp (11rp0001)
-                uint8_t rp = (opcode >> 4) & 0x03;
+                int8_t rp = (opcode >> 4) & 0x03;
                 uint16_t sp = cpu->get_sp();
-                uint8_t low = cpu->read_memory(sp);
-                uint8_t high = cpu->read_memory(sp + 1);
+                int8_t low = cpu->read_memory(sp);
+                int8_t high = cpu->read_memory(sp + 1);
                 printf("POP\n");
                 printf("SP: %8X\n", sp);
                 printf("sp-1: %8X\n", sp - 1);
@@ -338,7 +427,7 @@ __declspec(dllexport) int execute_instruction(CPU8085Functions* cpu) {
                 return 1;
             } else if ((opcode & 0xCF) == 0xC5) { // PUSH rp (11rp0101)
                 // Extract register pair bits (bits 5-4 of opcode)
-                uint8_t rp = (opcode & 0x30) >> 4; // More explicit extraction of bits 5-4
+                int8_t rp = (opcode & 0x30) >> 4; // More explicit extraction of bits 5-4
                 uint16_t sp = cpu->get_sp();
                 printf("Push\n");
                 printf("SP: %8X\n", sp);
@@ -388,29 +477,29 @@ __declspec(dllexport) int execute_instruction(CPU8085Functions* cpu) {
                 cpu->set_pc(pc + 1);
                 return 1;
             } else if (opcode == 0xD3) { // OUT port
-                uint8_t port = cpu->read_memory(pc + 1);
+                int8_t port = cpu->read_memory(pc + 1);
                 // OUT implementation would go here
                 cpu->set_pc(pc + 2);
                 return 1;
             } else if (opcode == 0xDB) { // IN port
-                uint8_t port = cpu->read_memory(pc + 1);
+                int8_t port = cpu->read_memory(pc + 1);
                 // IN implementation would go here
                 cpu->set_pc(pc + 2);
                 return 1;
             } else if (opcode == 0xD2) { // JNC addr
-                uint8_t low = cpu->read_memory(pc + 1);
-                uint8_t high = cpu->read_memory(pc + 2);
+                int8_t low = cpu->read_memory(pc + 1);
+                int8_t high = cpu->read_memory(pc + 2);
                 // JNC implementation would go here
                 cpu->set_pc(pc + 3);
                 return 1;
             } else if (opcode == 0xDA) { // JC addr
-                uint8_t low = cpu->read_memory(pc + 1);
-                uint8_t high = cpu->read_memory(pc + 2);
+                int8_t low = cpu->read_memory(pc + 1);
+                int8_t high = cpu->read_memory(pc + 2);
                 // JC implementation would go here
                 cpu->set_pc(pc + 3);
                 return 1;
             } else if (opcode == 0xD6) { // SUI data
-                uint8_t imm = cpu->read_memory(pc + 1);
+                int8_t imm = cpu->read_memory(pc + 1);
                 // SUI implementation would go here
                 cpu->set_pc(pc + 2);
                 return 1;
@@ -438,7 +527,7 @@ __declspec(dllexport) int execute_instruction(CPU8085Functions* cpu) {
                 cpu->set_pc(pc + 1);
                 return 1;
             } else if (opcode == 0xE6) { // ANI data
-                uint8_t imm = cpu->read_memory(pc + 1);
+                int8_t imm = cpu->read_memory(pc + 1);
                 // ANI implementation would go here
                 cpu->set_pc(pc + 2);
                 return 1;
@@ -446,14 +535,14 @@ __declspec(dllexport) int execute_instruction(CPU8085Functions* cpu) {
                 // PCHL implementation would go here
                 return 1;
             } else if (opcode == 0xE2) { // JPO addr
-                uint8_t low = cpu->read_memory(pc + 1);
-                uint8_t high = cpu->read_memory(pc + 2);
+                int8_t low = cpu->read_memory(pc + 1);
+                int8_t high = cpu->read_memory(pc + 2);
                 // JPO implementation would go here
                 cpu->set_pc(pc + 3);
                 return 1;
             } else if (opcode == 0xEA) { // JPE addr
-                uint8_t low = cpu->read_memory(pc + 1);
-                uint8_t high = cpu->read_memory(pc + 2);
+                int8_t low = cpu->read_memory(pc + 1);
+                int8_t high = cpu->read_memory(pc + 2);
                 // JPE implementation would go here
                 cpu->set_pc(pc + 3);
                 return 1;
@@ -473,12 +562,12 @@ __declspec(dllexport) int execute_instruction(CPU8085Functions* cpu) {
                 cpu->set_pc(pc + 1);
                 return 1;
             } else if (opcode == 0xF6) { // ORI data
-                uint8_t imm = cpu->read_memory(pc + 1);
+                int8_t imm = cpu->read_memory(pc + 1);
                 // ORI implementation would go here
                 cpu->set_pc(pc + 2);
                 return 1;
             } else if (opcode == 0xFE) { // CPI data
-                uint8_t imm = cpu->read_memory(pc + 1);
+                int8_t imm = cpu->read_memory(pc + 1);
                 // CPI implementation would go here
                 cpu->set_pc(pc + 2);
                 return 1;
@@ -491,19 +580,27 @@ __declspec(dllexport) int execute_instruction(CPU8085Functions* cpu) {
                 cpu->set_pc(pc + 1);
                 return 1;
             } else if (opcode == 0xF2) { // JP addr
-                uint8_t low = cpu->read_memory(pc + 1);
-                uint8_t high = cpu->read_memory(pc + 2);
-                // JP implementation would go here
-                cpu->set_pc(pc + 3);
-                return 1;
+                if (cpu->get_flags() & FLAG_S) {
+                    int8_t low = cpu->read_memory(pc + 1);
+                    int8_t high = cpu->read_memory(pc + 2);
+                    uint16_t addr = ((uint16_t)high << 8) | low;
+                    cpu->set_pc(addr);
+                } else {
+                    cpu->set_pc(pc + 3);
+                }
+                break;
             } else if (opcode == 0xFA) { // JM addr
-                uint8_t low = cpu->read_memory(pc + 1);
-                uint8_t high = cpu->read_memory(pc + 2);
-                // JM implementation would go here
-                cpu->set_pc(pc + 3);
-                return 1;
+                if (cpu->get_flags() & !FLAG_S) {
+                    int8_t low = cpu->read_memory(pc + 1);
+                    int8_t high = cpu->read_memory(pc + 2);
+                    uint16_t addr = ((uint16_t)high << 8) | low;
+                    cpu->set_pc(addr);
+                } else {
+                    cpu->set_pc(pc + 3);
+                }
+                break;
             } else if (opcode == 0xF9) { // SPHL
-                // SPHL implementation would go here
+                cpu->set_sp(((uint16_t)cpu->read_reg(REG_H) << 8) | cpu->read_reg(REG_L));
                 cpu->set_pc(pc + 1);
                 return 1;
             } else if (opcode == 0xF4) { // CP
