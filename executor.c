@@ -159,7 +159,7 @@ __declspec(dllexport) int execute_instruction(CPU8085Functions* cpu) {
                        
                 }
                 cpu->set_pc(pc + 1);
-                break;  
+                return 1;
             } else if (opcode == 0x0A || opcode == 0x1A) { // LDAX B/D
                 int8_t rp = (opcode >> 4) & 0x01;
                 // LDAX implementation would go here
@@ -225,7 +225,7 @@ __declspec(dllexport) int execute_instruction(CPU8085Functions* cpu) {
                 }
                 
                 cpu->set_pc(pc + 1);
-                break;  
+                return 1;  
             } else if (opcode == 0x07) { // RLC
                 
 
@@ -588,7 +588,7 @@ __declspec(dllexport) int execute_instruction(CPU8085Functions* cpu) {
                 } else {
                     cpu->set_pc(pc + 3);
                 }
-                break;
+                return 1;
             } else if (opcode == 0xFA) { // JM addr
                 if (cpu->get_flags() & !FLAG_S) {
                     int8_t low = cpu->read_memory(pc + 1);
@@ -598,7 +598,7 @@ __declspec(dllexport) int execute_instruction(CPU8085Functions* cpu) {
                 } else {
                     cpu->set_pc(pc + 3);
                 }
-                break;
+                return 1;
             } else if (opcode == 0xF9) { // SPHL
                 cpu->set_sp(((uint16_t)cpu->read_reg(REG_H) << 8) | cpu->read_reg(REG_L));
                 cpu->set_pc(pc + 1);
