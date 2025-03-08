@@ -159,7 +159,7 @@ __declspec(dllexport) int execute_instruction(CPU8085Functions* cpu) {
                        
                 }
                 cpu->set_pc(pc + 1);
-                return 1;
+                break;  
             } else if (opcode == 0x0A || opcode == 0x1A) { // LDAX B/D
                 int8_t rp = (opcode >> 4) & 0x01;
                 // LDAX implementation would go here
@@ -225,7 +225,7 @@ __declspec(dllexport) int execute_instruction(CPU8085Functions* cpu) {
                 }
                 
                 cpu->set_pc(pc + 1);
-                return 1;  
+                break;  
             } else if (opcode == 0x07) { // RLC
                 
 
